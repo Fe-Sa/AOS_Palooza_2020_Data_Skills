@@ -40,6 +40,7 @@ unique(swc_externalLabData$collectDate)
 # Convert all times to POSIXct
 swc_domainLabData$collectDate=as.POSIXct(swc_domainLabData$collectDate)
 swc_externalLabData$collectDate=as.POSIXct(swc_externalLabData$collectDate)
+swc_fieldSuperParent$collectDate=as.POSIXct(swc_fieldSuperParent$collectDate)
 
 ## extract only samples from same date
 ## because the latest samples haven't returned from the eternal lab yet
@@ -78,6 +79,62 @@ ggplot(data=combined_pH, mapping=aes(x=avg_domain_pH, y=pH))+ #define x and y ax
 summary(lm(data=combined_pH, pH ~ avg_domain_pH))
 
 cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
+
+
+#######
+# Compare conductivity
+
+# select only the samples from the domainLab with dates that match the externalLab's dates
+swc_domain_comparable=swc_fieldSuperParent[swc_fieldSuperParent$parentSampleID %in% swc_externalLabData$sampleID,]
+
+# likewise, select only the external lab samples with daets that match 
+swc_external_comparable=swc_externalLabData[swc_externalLabData$sampleID %in% swc_fieldSuperParent$parentSampleID,]
+
+ggplot()+
+  geom_point(swc_domain_comparable, mapping=aes(x=collectDate, y=specificConductance))+
+  geom_point(data=swc_external_comparable, mapping=aes(x=collectDate, y=externalConductance), col="red2")+
+  xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01")) #must convert date ranges to POSIXct to match input data
+
+
+## Average values from domain samples
+
+domain_mean_conductance=
+  swc_domain_comparable %>%
+  group_by(collectDate) %>%
+  summarize(avg_domain_conductance=mean(specificConductance))
+
+# Merge averaged domainLab values with externalLab values by collection date
+combined_conductance=merge(domain_mean_conductance, swc_external_comparable, by="collectDate")
+
+# plot a comparison of conductance values between domainLab and externalLab with 
+ggplot(data=combined_conductance, mapping=aes(x=avg_domain_conductance, y=externalConductance))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Averaged domain lab conductivity")+
+  ylab("External lab conductivity")
+
+# read the summary information for the linear model here
+summary(lm(data=combined_conductance, externalConductance ~ avg_domain_conductance))
+
+cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
+
+#Woah, look at that outlier! What if we remove it..
+
+combined_conductance_corrected=combined_conductance[combined_conductance$externalConductance<500,]
+
+# plot a comparison of conductance values between domainLab and externalLab with 
+ggplot(data=combined_conductance_corrected, mapping=aes(x=avg_domain_conductance, y=externalConductance))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Averaged domain lab conductivity")+
+  ylab("External lab conductivity")
+
+# read the summary information for the linear model here
+summary(lm(data=combined_conductance_corrected, externalConductance ~ avg_domain_conductance))
+
+cor.test(combined_conductance_corrected$externalConductance, combined_conductance_corrected$avg_domain_conductance)
 
 
 ##### Section 2 - compare EPT taxa between KING and MCDI
