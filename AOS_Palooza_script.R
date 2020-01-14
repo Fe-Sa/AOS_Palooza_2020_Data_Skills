@@ -121,10 +121,30 @@ families =
   group_by(siteID, family) %>%
   summarize(count=n())
 
-ggplot(data=families, aes(x=fct_reorder(family, count, .desc=T), y=count, fill=siteID))+
+# Let's plot these observations grouped by family, and filled in by siteID
+
+ggplot(data=families, aes(x=family, y=count, fill=siteID))+
   geom_bar(stat="identity", position="dodge")+
   theme(axis.text.x = element_text(angle = 90))+
   xlab("Taxonomic family name")
 
+# Welp, that's messy! Let's re-order the factor levels from largest to smallest
+
+ggplot(data=families, 
+       aes(x=fct_reorder(family, count, .desc=T), #use fct_reorder to organize by number of observations
+           y=count, fill=siteID))+
+  geom_bar(stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Taxonomic family name")
+
+# Better, but that plot is kind of hard to see because there are many families with only a few observations.
+# So, we can plot only those families with >3 observations to focus on the 'major' taxa
+
+ggplot(data=families[families$count>3,], # remove families with very low number of observations
+       aes(x=fct_reorder(family, count, .desc=T), #use fct_reorder to organize by number of observations
+           y=count, fill=siteID))+
+  geom_bar(stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Taxonomic family name")
 
        
