@@ -1,0 +1,87 @@
+## AOS Palooza data exploration script
+## By Donal O'Leary of Battelle's National Ecological Observatory Network (NEON)
+## For the 2020 AOS Palooza
+## These materials are based on the NEONscience.org data skills tutorials
+## and referenced where appropiriate.
+## Full credit to the respective authors of those tuorials. 
+
+# install.packages("neonUtilities")
+# install.packages("tidyverse")
+
+# load packages
+library(neonUtilities)
+library(tidyverse)
+
+# download data product and load into environment
+# for an excellent tutorial see: https://www.neonscience.org/download-explore-neon-data
+h2o_chemistry_full=loadByProduct(dpID="DP1.20093.001", site="FLNT", package = 'expanded',check.size = T)
+#loadByProduct() gives us a big, complex 'list', that we called h2o_chemistry_full
+
+# To view the use guide for this product, go to:
+# https://data.neonscience.org/documents/10179/2237401/NEON_waterChem_userGuide_vA/4974e1a3-1937-470c-ac29-061a54524bf0
+
+# To make this easier to work with, we will use the list2env() function to give us the individual 
+# list items as data.frames
+list2env(h2o_chemistry_full, .GlobalEnv)
+
+# Let's take a look at all of the variables available to us in this data product:
+View(variables)
+
+# We can also see that there are two separate tables for the domainLabData and the externalLabData
+names(swc_domainLabData)
+names(swc_externalLabData)
+
+unique(swc_domainLabData$collectDate)
+unique(swc_externalLabData$collectDate)
+
+# Convert all times to POSIXct
+swc_domainLabData$collectDate=as.POSIXct(swc_domainLabData$collectDate)
+swc_externalLabData$collectDate=as.POSIXct(swc_externalLabData$collectDate)
+
+## extract only samples from same date
+## because the latest samples haven't returned from the eternal lab yet
+
+# select only the samples from the domainLab with dates that match the externalLab's dates
+swc_domain_comparable=swc_domainLabData[swc_domainLabData$parentSampleID %in% swc_externalLabData$sampleID,]
+
+# likewise, select only the external lab samples with daets that match 
+swc_external_comparable=swc_externalLabData[swc_externalLabData$sampleID %in% swc_domainLabData$parentSampleID,]
+
+ggplot()+
+  geom_point(swc_domain_comparable, mapping=aes(x=collectDate, y=initialSamplepH))+
+  geom_point(data=swc_external_comparable, mapping=aes(x=collectDate, y=pH), col="red2")+
+  xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01")) #must convert date ranges to POSIXct to match input data
+
+
+## Average values from domain samples
+
+domain_mean_pH=
+  swc_domain_comparable %>%
+  group_by(collectDate) %>%
+  summarize(avg_domain_pH=mean(initialSamplepH))
+
+# Merge averaged domainLab values with externalLab values by collection date
+combined_pH=merge(domain_mean_pH, swc_external_comparable, by="collectDate")
+
+# plot a comparison of pH values between domainLab and externalLab with 
+ggplot(data=combined_pH, mapping=aes(x=avg_domain_pH, y=pH))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Averaged domain lab pH")+
+  ylab("External lab pH")
+
+# read the summary information for the linear model here
+summary(lm(data=combined_pH, pH ~ avg_domain_pH))
+
+cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
+
+
+##### Section 2 - compare EPT taxa between KING and MCDI
+
+
+
+
+
+
+       
