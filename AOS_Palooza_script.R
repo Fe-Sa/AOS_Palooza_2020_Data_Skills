@@ -79,9 +79,53 @@ cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
 
 ##### Section 2 - compare EPT taxa between KING and MCDI
 
+rm(list=ls())
+
+EPT_full=loadByProduct(dpID = "DP1.20120.001", site = c("KING","MCDI"), package = "expanded",check.size = T)
+
+# use list2env() again to convert EPT_full object to more useful data.frames
+list2env(EPT_full, .GlobalEnv)
+
+# First, there is an issue that individuals sampled are identified to different taxonomic levels
+# so we use the dplyr package's "pipe" notation to count the number of individuals identified
+# at each taxonomic level
+taxonomic_specificity =
+  inv_taxonomyProcessed %>%
+  group_by(siteID, taxonRank) %>%
+  summarize(count=n())
+
+## three different ways to plot it!
+barplot(taxonomic_specificity$count, 
+        names.arg = paste(taxonomic_specificity$siteID, taxonomic_specificity$taxonRank, sep=" "),
+        las=2)
+
+ggplot(data=taxonomic_specificity, aes(x=taxonRank, y=count, fill=siteID))+
+  geom_bar(stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(data=taxonomic_specificity, aes(x=taxonRank, y=count, fill=siteID))+
+  geom_bar(stat="identity")+
+  facet_wrap(~siteID)+
+  theme(axis.text.x = element_text(angle = 90))
+
+# Note, to get the bars to plot in taxonomic order you could change the
+# order of the factor levels as shown here:
+# http://www.cookbook-r.com/Manipulating_data/Changing_the_order_of_levels_of_a_factor/
 
 
+## Suppose we only want to look at the diversity at the family level. We can count the number of 
+#  observations for each famil at each site, again using the dplyr functions and 'pipes':
 
+families =
+  inv_taxonomyProcessed %>%
+  group_by(siteID, family) %>%
+  summarize(count=n())
+
+families=arrange(families, desc(count))
+
+ggplot(data=families, aes(x=family, y=count, fill=siteID))+
+  geom_bar(stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))
 
 
        
