@@ -121,11 +121,10 @@ families =
   group_by(siteID, family) %>%
   summarize(count=n())
 
-families=arrange(families, desc(count))
-
-ggplot(data=families, aes(x=family, y=count, fill=siteID))+
+ggplot(data=families, aes(x=fct_reorder(family, count, .desc=T), y=count, fill=siteID))+
   geom_bar(stat="identity", position="dodge")+
-  theme(axis.text.x = element_text(angle = 90))
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Taxonomic family name")
 
 
        
