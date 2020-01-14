@@ -27,6 +27,9 @@ list2env(h2o_chemistry_full, .GlobalEnv)
 # Let's take a look at all of the variables available to us in this data product:
 View(variables)
 
+###
+# Use swc_fieldSuperParent instead! (these are the field handheld readings)
+
 # We can also see that there are two separate tables for the domainLabData and the externalLabData
 names(swc_domainLabData)
 names(swc_externalLabData)
