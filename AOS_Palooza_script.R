@@ -80,6 +80,9 @@ summary(lm(data=combined_pH, pH ~ avg_domain_pH))
 
 cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
 
+## Maybe there are pH differences simply due to changes in temperature?
+# https://www.westlab.com/blog/2017/11/15/how-does-temperature-affect-ph
+
 
 #######
 # Compare conductivity
