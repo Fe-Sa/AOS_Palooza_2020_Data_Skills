@@ -25,7 +25,7 @@ h2o_chemistry_full=loadByProduct(dpID="DP1.20093.001", site="FLNT", package = 'e
 list2env(h2o_chemistry_full, .GlobalEnv)
 
 # Let's take a look at all of the variables available to us in this data product:
-View(variables)
+View(variables_20093)
 
 ###
 # Use swc_fieldSuperParent instead! (these are the field handheld readings)
@@ -96,7 +96,8 @@ swc_external_comparable=swc_externalLabData[swc_externalLabData$sampleID %in% sw
 ggplot()+
   geom_point(swc_domain_comparable, mapping=aes(x=collectDate, y=specificConductance))+
   geom_point(data=swc_external_comparable, mapping=aes(x=collectDate, y=externalConductance), col="red2")+
-  xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01")) #must convert date ranges to POSIXct to match input data
+  xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01"))+ #must convert date ranges to POSIXct to match input data
+  ylim(0,200)
 
 
 ## Average values from domain samples
@@ -164,7 +165,14 @@ barplot(taxonomic_specificity$count,
 
 ggplot(data=taxonomic_specificity, aes(x=taxonRank, y=count, fill=siteID))+
   geom_bar(stat="identity", position="dodge")+
-  theme(axis.text.x = element_text(angle = 90))
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Taxonomic Level Identified")
+
+ggplot(data=taxonomic_specificity, aes(x=fct_reorder(taxonRank, count, .desc=T), # Use fct_reorder() to arrange in descending order
+                                       y=count, fill=siteID))+
+  geom_bar(stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Taxonomic Level Identified")
 
 ggplot(data=taxonomic_specificity, aes(x=taxonRank, y=count, fill=siteID))+
   geom_bar(stat="identity")+
