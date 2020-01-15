@@ -31,17 +31,11 @@ View(variables_20093)
 ###
 # Use swc_fieldSuperParent instead! (these are the field handheld readings)
 
-# We can also see that there are two separate tables for the domainLabData and the externalLabData
+# We can also see that there are two separate tables for the domainLabData 
+# and the externalLabData, and they measure different things!
 names(swc_domainLabData)
 names(swc_externalLabData)
 
-unique(swc_domainLabData$collectDate)
-unique(swc_externalLabData$collectDate)
-
-# Convert all times to POSIXct
-swc_domainLabData$collectDate=as.POSIXct(swc_domainLabData$collectDate)
-swc_externalLabData$collectDate=as.POSIXct(swc_externalLabData$collectDate)
-swc_fieldSuperParent$collectDate=as.POSIXct(swc_fieldSuperParent$collectDate)
 
 ## extract only samples from same date
 ## because the latest samples haven't returned from the eternal lab yet
@@ -53,34 +47,52 @@ swc_domain_comparable=swc_domainLabData[swc_domainLabData$parentSampleID %in% sw
 swc_external_comparable=swc_externalLabData[swc_externalLabData$sampleID %in% swc_domainLabData$parentSampleID,]
 
 ggplot()+
-  geom_point(swc_domain_comparable, mapping=aes(x=collectDate, y=initialSamplepH))+
-  geom_point(data=swc_external_comparable, mapping=aes(x=collectDate, y=pH), col="red2")+
-  xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01")) #must convert date ranges to POSIXct to match input data
+  geom_point(swc_domain_comparable, mapping=aes(x=collectDate, y=alkMgPerL), shape=1)+
+  geom_point(data=swc_external_comparable, mapping=aes(x=collectDate, y=waterBicarbonate), shape=1, col="red2")#+
+  #xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01")) #must convert date ranges to POSIXct to match input data
 
 
-## Average values from domain samples
+## Make combined data.frame for alkalinity (bicarbonate)
 
-domain_mean_pH=
-  swc_domain_comparable %>%
-  group_by(collectDate) %>%
-  summarize(avg_domain_pH=mean(initialSamplepH))
+domain_alk=filter(swc_domain_comparable, sampleType=="ALK")
 
-# Merge averaged domainLab values with externalLab values by collection date
-combined_pH=merge(domain_mean_pH, swc_external_comparable, by="collectDate")
+alk_combined_df=full_join(x=domain_alk, y=swc_external_comparable, by=c("parentSampleID"="sampleID"))
 
-# plot a comparison of pH values between domainLab and externalLab with 
-ggplot(data=combined_pH, mapping=aes(x=avg_domain_pH, y=pH))+ #define x and y axes here
+# plot a comparison of ALK values between domainLab and externalLab with 
+ggplot(data=alk_combined_df, mapping=aes(x=alkMgPerL, y=waterBicarbonate))+ #define x and y axes here
   geom_point(col="blue2")+ #plot the data points
   geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
   stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
-  xlab("Averaged domain lab pH")+
-  ylab("External lab pH")
+  xlab("Domain ALK")+
+  ylab("External lab bicarbonate")
 
 # read the summary information for the linear model here
-summary(lm(data=combined_pH, pH ~ avg_domain_pH))
+summary(lm(data=alk_combined_df, waterBicarbonate ~ alkMgPerL))
 
-cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
+cor.test(alk_combined_df$waterBicarbonate,alk_combined_df$alkMgPerL)
 
+
+## hmmmm, looks like that one outlier is really throwing things off.
+## Let's remove it and try again
+
+alk_combined_df=alk_combined_df[alk_combined_df$waterBicarbonate<50,]
+
+# plot a comparison of ALK values between domainLab and externalLab with 
+ggplot(data=alk_combined_df, mapping=aes(x=alkMgPerL, y=waterBicarbonate))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Domain ALK")+
+  ylab("External lab bicarbonate")
+
+# read the summary information for the linear model here
+summary(lm(data=alk_combined_df, waterBicarbonate ~ alkMgPerL))
+
+cor.test(alk_combined_df$waterBicarbonate,alk_combined_df$alkMgPerL)
+
+## Wow, it still isn't very good! 
+## Perhaps there are different titration styles? Or the alkalinity is so low that 
+## the measurement uncertainty is large compared to the true value?
 
 #######
 # Compare conductivity
