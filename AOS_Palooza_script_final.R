@@ -7,6 +7,7 @@
 
 # install.packages("neonUtilities")
 # install.packages("tidyverse")
+# install.packages("reshape2")
 
 # load packages
 library(neonUtilities)
@@ -26,11 +27,14 @@ h2o_chemistry_full=loadByProduct(dpID="DP1.20093.001",
 # list items as data.frames
 list2env(h2o_chemistry_full, .GlobalEnv)
 
-# We can also see that there are two separate tables for the domainLabData 
+# We can also see that there are three separate tables for the domainLabData 
 # and the externalLabData, and they measure different things!
 names(swc_domainLabData)
 names(swc_externalLabData)
 
+## There are also two separate files for the data that are collected in the field:
+names(swc_fieldData)
+names(swc_fieldSuperParent) # this 'SuperParent' table contains all of the measured values
 
 # extract the 'location' from the SampleID to use as a plotting variable:
 swc_domainLabData$location=substr(swc_domainLabData$parentSampleID, 6,7)
@@ -46,19 +50,23 @@ ggplot(data=swc_domainLabData, mapping=aes(x=collectDate))+
 
 
 ## Make plot comparing dissolved oxygen and conductivity
+# the melt() function reshapes a data.frame into a format that is better for ggplot
 swc_fieldMelt=melt(swc_fieldSuperParent, id.vars=c("parentSampleID","collectDate","location"), measure.vars=c("dissolvedOxygen","specificConductance"))
 
-ggplot(data=swc_fieldMelt[swc_fieldMelt$location %in% c("C1","C0","C2"),], mapping=aes(x=collectDate))+
+ggplot(data=swc_fieldMelt[swc_fieldMelt$location %in% c("C1","C0","C2"),], mapping=aes(x=collectDate))+ # removed IN and OT because they make 2015/2016 look very messy
   geom_line(data=swc_fieldSuperParent[swc_fieldSuperParent$location %in% c("C1","C0"),], mapping=aes(y=waterTemp),col="blue")+
   geom_point(mapping=aes(y=value, shape=location, color=variable))+
   geom_point(mapping=aes(y=value, shape=location, color=variable))+
   ylab("DO (pct%), Conductance (ms/ml), and Temp (*C)")+
-  ggtitle("Field Data")
+  ggtitle("Hand-collected Field Data")
 
-### Compare domain vs external lab conductivity
 
+## these lines combine the different tables (field, domainLab, externalLab) into a single table by the sampleID
 swc_combined=full_join(x=swc_domainLabData, y=swc_externalLabData, by=c("parentSampleID"="sampleID"))
 swc_combined=full_join(x=swc_combined, y=swc_fieldSuperParent, by="parentSampleID")
+
+### Compare external Lab bicarbonate and Domain lab ALK
+## Question from Donal - is this fair to compare these values?
 # plot a comparison of ALK values between domainLab and externalLab with 
 ggplot(data=swc_combined, mapping=aes(x=alkMgPerL, y=waterBicarbonate, shape=location.x, color=location.x))+ #define x and y axes here
   geom_point()+ #plot the data points
@@ -77,8 +85,15 @@ ggplot(data=swc_combined, mapping=aes(x=alkMgPerL, y=waterBicarbonate, shape=loc
   xlim(-3,10)+
   ylim(0,15)
 
+##Interesting to see which locations appear to have bias compared to the 1:1 dashed line
+# for example the squares (C2) have many observations where the domain ALK is far higher than the external lab bicarbonate
+# where as the triangles (C1) show the opposite bias
+# How does this compare to the inherent measurement uncertainty for each (titration?) method?
 
-### ok, let's compare conductivity:
+
+### Compare domain vs external lab conductivity
+## Conductivity should be relatively straightforward to measure and compare
+## unless, of course, changes in temperature and chemistry have occurred in transit to the external lab
 # plot a comparison of conductivity between external lab and field observation
 ggplot(data=swc_combined, mapping=aes(x=specificConductance, y=externalConductance, color=location.x, shape=location.x))+ #define x and y axes here
   geom_point()+ #plot the data points
@@ -86,6 +101,18 @@ ggplot(data=swc_combined, mapping=aes(x=specificConductance, y=externalConductan
   #stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
   xlab("Domain field conductivity")+
   ylab("External conductivity")
+
+## Again! A single outlier really throws things off. Let's focus the plot on the relevant values
+
+ggplot(data=swc_combined, mapping=aes(x=specificConductance, y=externalConductance, color=location.x, shape=location.x))+ #define x and y axes here
+  geom_point()+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  #stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Domain field conductivity")+
+  ylab("External conductivity")+
+  xlim(0,30)+
+  ylim(0,30)
+
 
 
 ###
@@ -172,7 +199,7 @@ EPT_pct_df
 rm(list=ls())
 
 EPT_full=loadByProduct(dpID = "DP1.20120.001", 
-                       site = "all", package = "expanded",check.size = T)
+                       site = "all", package = "expanded",check.size = F)
 
 # use list2env() again to convert EPT_full object to more useful data.frames
 list2env(EPT_full, .GlobalEnv)
