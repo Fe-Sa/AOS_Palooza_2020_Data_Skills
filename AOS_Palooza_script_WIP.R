@@ -26,6 +26,10 @@ h2o_chemistry_full=loadByProduct(dpID="DP1.20093.001",
 # list items as data.frames
 list2env(h2o_chemistry_full, .GlobalEnv)
 
+# Let's take a look at all of the variables available to us in this data product:
+View(variables_20093)
+
+
 # We can also see that there are two separate tables for the domainLabData 
 # and the externalLabData, and they measure different things!
 names(swc_domainLabData)
@@ -55,38 +59,133 @@ ggplot(data=swc_fieldMelt[swc_fieldMelt$location %in% c("C1","C0","C2"),], mappi
   ylab("DO (pct%), Conductance (ms/ml), and Temp (*C)")+
   ggtitle("Field Data")
 
-### Compare domain vs external lab conductivity
 
-swc_combined=full_join(x=swc_domainLabData, y=swc_externalLabData, by=c("parentSampleID"="sampleID"))
-swc_combined=full_join(x=swc_combined, y=swc_fieldSuperParent, by="parentSampleID")
+## extract only samples from same date
+## because the latest samples haven't returned from the eternal lab yet
+
+# select only the samples from the domainLab with dates that match the externalLab's dates
+swc_domain_comparable=swc_domainLabData[swc_domainLabData$parentSampleID %in% swc_externalLabData$sampleID,]
+
+# likewise, select only the external lab samples with daets that match 
+swc_external_comparable=swc_externalLabData[swc_externalLabData$sampleID %in% swc_domainLabData$parentSampleID,]
+
+## Make combined data.frame for alkalinity (bicarbonate)
+
+domain_alk=filter(swc_domain_comparable, sampleType=="ALK")
+
+alk_combined_df=full_join(x=domain_alk, y=swc_external_comparable, by=c("parentSampleID"="sampleID"))
+
+alk_combined_df$location=substr(alk_combined_df$parentSampleID,6,7)
+
+swc_combined=full_join(x=swc_domain_comparable, y=swc_external_comparable, by=c("parentSampleID"="sampleID"))
+
+swc_combined$location=substr(swc_combined$parentSampleID,6,7)
+
+
+#xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01")) #must convert date ranges to POSIXct to match input data
+
 # plot a comparison of ALK values between domainLab and externalLab with 
-ggplot(data=swc_combined, mapping=aes(x=alkMgPerL, y=waterBicarbonate, shape=location.x, color=location.x))+ #define x and y axes here
-  geom_point()+ #plot the data points
+ggplot(data=alk_combined_df, mapping=aes(x=alkMgPerL, y=waterBicarbonate, shape=location))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
   geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
   #stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
   xlab("Domain ALK")+
   ylab("External lab bicarbonate")
 
-## Wow! That's a big outlier. Let's zoom in on the more relevant data points
-ggplot(data=swc_combined, mapping=aes(x=alkMgPerL, y=waterBicarbonate, shape=location.x, color=location.x))+ #define x and y axes here
-  geom_point()+ #plot the data points
+# read the summary information for the linear model here
+summary(lm(data=alk_combined_df, waterBicarbonate ~ alkMgPerL))
+
+cor.test(alk_combined_df$waterBicarbonate,alk_combined_df$alkMgPerL)
+
+
+## hmmmm, looks like that one outlier is really throwing things off.
+## Let's remove it and try again
+
+alk_combined_df=alk_combined_df[alk_combined_df$waterBicarbonate<50,]
+
+# plot a comparison of ALK values between domainLab and externalLab with 
+ggplot(data=alk_combined_df, mapping=aes(x=alkMgPerL, y=waterBicarbonate))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
   geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
-  #stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
   xlab("Domain ALK")+
-  ylab("External lab bicarbonate")+
-  xlim(-3,10)+
-  ylim(0,15)
+  ylab("External lab bicarbonate")
+
+# read the summary information for the linear model here
+summary(lm(data=alk_combined_df, waterBicarbonate ~ alkMgPerL))
+
+cor.test(alk_combined_df$waterBicarbonate,alk_combined_df$alkMgPerL)
+
+## Wow, it still isn't very good! 
+## Perhaps there are different titration styles? Or the alkalinity is so low that 
+## the measurement uncertainty is large compared to the true value?
+
+#######
+# Compare conductivity
+
+# select only the samples from the domainLab with dates that match the externalLab's dates
+swc_domain_comparable=swc_fieldSuperParent[swc_fieldSuperParent$parentSampleID %in% swc_externalLabData$sampleID,]
+
+# likewise, select only the external lab samples with daets that match 
+swc_external_comparable=swc_externalLabData[swc_externalLabData$sampleID %in% swc_fieldSuperParent$parentSampleID,]
+
+ggplot()+
+  geom_point(swc_domain_comparable, mapping=aes(x=collectDate, y=specificConductance), shape=1)+
+  geom_point(data=swc_external_comparable, mapping=aes(x=collectDate, y=externalConductance), col="red2", shape=3)+
+  xlim(as.POSIXct("2017-01-01"),as.POSIXct("2017-12-01"))+ #must convert date ranges to POSIXct to match input data
+  ylim(0,30)
 
 
-### ok, let's compare conductivity:
-# plot a comparison of conductivity between external lab and field observation
-ggplot(data=swc_combined, mapping=aes(x=specificConductance, y=externalConductance, color=location.x, shape=location.x))+ #define x and y axes here
-  geom_point()+ #plot the data points
+## Average values from domain samples
+
+domain_mean_conductance=
+  swc_domain_comparable %>%
+  group_by(collectDate) %>%
+  summarize(avg_domain_conductance=mean())
+
+# Merge averaged domainLab values with externalLab values by collection date
+combined_conductance=merge(domain_mean_conductance, swc_external_comparable, by="collectDate")
+
+# plot a comparison of conductance values between domainLab and externalLab with 
+ggplot(data=combined_conductance, mapping=aes(x=avg_domain_conductance, y=externalConductance))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
   geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
-  #stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
-  xlab("Domain field conductivity")+
-  ylab("External conductivity")
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Averaged domain lab conductivity")+
+  ylab("External lab conductivity")
 
+# read the summary information for the linear model here
+summary(lm(data=combined_conductance, externalConductance ~ avg_domain_conductance))
+
+cor.test(combined_pH$avg_domain_pH,combined_pH$pH)
+
+#Woah, look at that outlier! What if we remove it..
+
+combined_conductance_corrected=combined_conductance[combined_conductance$externalConductance<100,]
+
+# plot a comparison of conductance values between domainLab and externalLab with 
+ggplot(data=combined_conductance_corrected, mapping=aes(x=avg_domain_conductance, y=externalConductance))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Averaged domain lab conductivity")+
+  ylab("External lab conductivity")
+
+# read the summary information for the linear model here
+summary(lm(data=combined_conductance_corrected, externalConductance ~ avg_domain_conductance))
+
+cor.test(combined_conductance_corrected$externalConductance, combined_conductance_corrected$avg_domain_conductance)
+
+
+## Compare ALC.ALK instead
+
+# plot a comparison of conductance values between domainLab and externalLab with 
+ggplot(data=combined_conductance, mapping=aes(x=avg_domain_conductance, y=externalConductance))+ #define x and y axes here
+  geom_point(col="blue2")+ #plot the data points
+  geom_abline(slope=1, intercept=0, lty=2, lwd=1)+ # add a dashed 1:1 line in black
+  stat_smooth(method = "lm", col = "red2")+ #add linear model with confidence interval in red/grey
+  xlab("Averaged domain lab conductivity")+
+  ylab("External lab conductivity")
 
 ###
 ##### Section 2 - compare EPT taxa between KING and MCDI
@@ -94,7 +193,7 @@ ggplot(data=swc_combined, mapping=aes(x=specificConductance, y=externalConductan
 rm(list=ls())
 
 EPT_full=loadByProduct(dpID = "DP1.20120.001", 
-                       site = c("KING","MCDI"), package = "expanded",check.size = F)
+                       site = c("KING","MCDI"), package = "expanded",check.size = T)
 
 # use list2env() again to convert EPT_full object to more useful data.frames
 list2env(EPT_full, .GlobalEnv)
